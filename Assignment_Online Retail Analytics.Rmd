@@ -1,0 +1,164 @@
+---
+title: "Online Retail Analytics"
+author: "Franklin Ngochi"
+date: "2023-02-26"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(RcppRoll)
+library(scales)
+```
+
+#Import the dataset
+```{r}
+SalesData<-read.csv(file="C:\\Users\\ngoch\\Downloads\\Online_Retail.csv", header=TRUE, sep=",")
+colnames(SalesData)
+```
+
+#Number and percentage transactions for countries with more than 1% total transactions (Question 1)
+```{r}
+CountryTransactions<-SalesData%>%count("Country")
+names(CountryTransactions)<-c("Country", "Transactions")
+CountryTransactions$percentage<-(CountryTransactions[,2]/sum(CountryTransactions[,2]))*100
+CountryTransactions
+CountryTransactions%>%filter(percentage>"1")
+```
+
+#Create Transaction Value variable and add to Dataframe (Question 2)
+```{r}
+SalesData$TransactionValue<-SalesData$Quantity*SalesData$UnitPrice
+head(SalesData, 2)
+```
+
+#Show transaction values by country for countries with Total Transaction above 130000 GBP (Question 3)
+```{r}
+CountryTransactions<-aggregate(SalesData$TransactionValue, list(SalesData$Country), FUN=sum)
+names(CountryTransactions)<-c("Country", "TransactionValue")
+CountryTransactions%>%filter(TransactionValue>130000)
+```
+
+#Question 4 data preparation
+
+```{r}
+Temp=strptime(SalesData$InvoiceDate,format='%m/%d/%Y %H:%M',tz='GMT')
+head(Temp)
+SalesData$New_Invoice_Date<-as.Date(Temp)
+SalesData$Invoice_Day_Week=weekdays(SalesData$New_Invoice_Date)
+SalesData$Invoice_Day_Hour=as.numeric(format(Temp, "%H"))
+SalesData$Invoice_Month=as.numeric(format(Temp, "%m"))
+```
+
+#Percentage of transactions by number by days of the week (4a)
+
+```{r}
+DailyTransactions<-SalesData%>%count("Invoice_Day_Week")
+names(DailyTransactions)<-c("Day", "Transactions")
+DailyTransactions$Percentage<-(DailyTransactions[,2]/sum(DailyTransactions[,2]))*100
+DailyTransactions
+```
+#Percentage of transactions by volume by days of the week (4b)
+
+```{r}
+DailyTransactionValue<-aggregate(SalesData$TransactionValue, list(SalesData$Invoice_Day_Week), FUN=sum)
+names(DailyTransactionValue)<-c("Day", "TransactionVolume")
+DailyTransactionValue$Percentage<-(DailyTransactionValue[,2]/sum(DailyTransactionValue[,2]))*100
+DailyTransactionValue
+```
+
+#Percentage of transactions by volume by month of the year (4c)
+```{r}
+MonthlyTransactionValue<-aggregate(SalesData$TransactionValue, list(SalesData$Invoice_Month), FUN=sum)
+names(MonthlyTransactionValue)<-c("Month", "TransactionVolume")
+MonthlyTransactionValue$Percentage<-(MonthlyTransactionValue[,2]/sum(MonthlyTransactionValue[,2]))*100
+MonthlyTransactionValue
+```
+
+#Date with highest number of transactions for Australia (4d)
+```{r}
+HighestAustralia<-SalesData%>%filter(Country=="Australia")%>%count("New_Invoice_Date")
+names(HighestAustralia)<-c("Date", "Transactions")
+HighestAustralia%>%filter(Transactions==max(Transactions))
+```
+#Best hour to start maintenance (4e)
+```{r}
+Activity<-SalesData%>%count("Invoice_Day_Hour")#Number of invoices processed each hour
+names(Activity)<-c("hour", "InvoicesProcessed")
+Activity$PotentialDisturbance<-roll_sum(Activity$InvoicesProcessed,2, fill=NA)#Effect of two-hour interruption on processing per start time
+Activity%>%filter(hour%in%(7:20))%>%filter(PotentialDisturbance==min(PotentialDisturbance, na.rm=TRUE))
+#start time with the least potential disturbance between 7h00 and 20h00 is 19h00
+```
+
+#Plot Histogram for Germany (Question 5)
+```{r}
+Germany<-select(SalesData, Country,TransactionValue)%>%filter(Country=="Germany")
+hist(Germany$TransactionValue, col = 'skyblue3')
+```
+
+#Customer with highest number of transactions (Question 6a)
+```{r}
+SalesData2<-na.omit(SalesData)
+TransactionCount<-plyr::count(SalesData2$CustomerID)
+names(TransactionCount)<-c("Customer ID", "Transactions")
+TransactionCount%>%filter(Transactions==max(Transactions))
+
+```
+# Most valuable customer(Question 6b)
+```{r}
+CustomerValue<-aggregate(SalesData2$TransactionValue, list(SalesData2$CustomerID), FUN=sum)
+names(CustomerValue)<-c("CustomerID", "Revenue")
+CustomerValue%>%filter(Revenue==max(Revenue))
+```
+
+#Percentage of missing values for each variable in dataset (Question 7)
+```{r}
+colMeans(is.na(SalesData))*100
+```
+
+#Number of transactions with missing CustomerID records by countries (Question 8)
+```{r}
+MissingID<-SalesData%>%filter(is.na(SalesData$CustomerID))
+counts<-plyr::count(MissingID$Country)
+names(counts)<-c("Country", "Transactions with Missing Customer ID records")
+counts
+```
+
+#On average, how often the customers return to the website for their next shopping (Question 9)
+```{r}
+
+
+```
+#Return rate of the goods purchased by French customers (Question 10)
+
+```{r}
+CancelledTransactions<-SalesData%>%filter(Quantity<0)%>%plyr::count("Country")
+names(CancelledTransactions)<-c("Country", "CancelledTransactions")
+CancelledTransactions$ReturnRate<-CancelledTransactions$CancelledTransactions/nrow(SalesData)
+CancelledTransactions%>%filter(Country=="France")
+
+
+```
+
+
+#Product that has generated the highest revenue for the retailer(Question 11)
+
+```{r}
+ProductValue<-aggregate(SalesData$TransactionValue, list(SalesData$Description), FUN=sum)
+names(ProductValue)<-c("Product", "Revenue")
+ProductValue%>%filter(Revenue==max(Revenue))
+```
+#How many unique customers are represented in the dataset (Question 12)
+```{r}
+paste("The number of Unique customers is", n_distinct(SalesData2[,7]))
+```
+
